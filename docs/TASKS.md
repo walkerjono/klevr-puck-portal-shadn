@@ -14,6 +14,7 @@ TODO:
 - [ ] klevr-list facets add selected chips
 - [x] klevr-list no pagination controls are visible
 - [-] klevr-list column filter based on datatype (date range, numeric range, categorical)
+    - shouldn't need datatype in database.json, it should read type from metdata
 
 - [ ] donation component:
     - Use Hero as a starting point
