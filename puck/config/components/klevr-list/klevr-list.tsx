@@ -1,8 +1,31 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import {
+  type ColumnDef,
+  type ColumnFiltersState,
+  flexRender,
+  getCoreRowModel,
+  getFilteredRowModel,
+  getPaginationRowModel,
+  getSortedRowModel,
+  type PaginationState,
+  type SortingState,
+  useReactTable,
+  type VisibilityState,
+} from "@tanstack/react-table";
+import { ChevronDown } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuCheckboxItem,
+  DropdownMenuContent,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { Input } from "@/components/ui/input";
 import {
   Table,
   TableBody,
@@ -34,9 +57,35 @@ export interface KlevrListProps {
   enableSorting?: boolean;
 }
 
-function getColumnInstanceKey(column: KlevrListColumn, index: number): string {
-  const normalized = column.key.trim();
-  return normalized ? `${normalized}-${index}` : `column-${index}`;
+type KlevrListRow = Record<string, unknown>;
+
+const CATEGORICAL_FILTER_THRESHOLD = 8;
+
+function normalizeValue(value: unknown): string {
+  if (value == null) {
+    return "";
+  }
+
+  return String(value).trim().toLowerCase();
+}
+
+function getUniqueColumnValues(rows: KlevrListRow[], key: string): string[] {
+  const values = new Set<string>();
+
+  for (const row of rows) {
+    const normalized = String(row[key] ?? "").trim();
+    if (normalized) {
+      values.add(normalized);
+    }
+  }
+
+  return [...values].sort((left, right) => left.localeCompare(right));
+}
+
+function isCategoricalColumn(column: KlevrListColumn, uniqueValues: string[]): boolean {
+  const key = column.key.toLowerCase();
+  const likelyCategorical = /status|state|type|category|priority/.test(key);
+  return likelyCategorical || uniqueValues.length <= CATEGORICAL_FILTER_THRESHOLD;
 }
 
 function parseRecordIdFromPath(pathname: string): string | undefined {
@@ -47,24 +96,6 @@ function parseRecordIdFromPath(pathname: string): string | undefined {
 
   return decodeURIComponent(parts[parts.length - 1]);
 }
-
-function sortRows(rows: Record<string, unknown>[], key: string, asc: boolean) {
-  return [...rows].sort((left, right) => {
-    const a = String(left[key] ?? "");
-    const b = String(right[key] ?? "");
-
-    if (a === b) {
-      return 0;
-    }
-
-    if (asc) {
-      return a > b ? 1 : -1;
-    }
-
-    return a < b ? 1 : -1;
-  });
-}
-
 export const KlevrList = ({
   padding,
   className,
@@ -79,13 +110,19 @@ export const KlevrList = ({
   enableSorting = true,
 }: KlevrListProps) => {
   const resolvedPadding = padding ?? { top: "none", bottom: "none" };
-  const [rows, setRows] = useState<Record<string, unknown>[]>([]);
+  const [rows, setRows] = useState<KlevrListRow[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const [sortKey, setSortKey] = useState<string>(columns[0]?.key ?? "");
-  const [sortAsc, setSortAsc] = useState(true);
-  const [page, setPage] = useState(1);
+  const [sorting, setSorting] = useState<SortingState>([]);
+  const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([]);
+  const [columnVisibility, setColumnVisibility] = useState<VisibilityState>({});
+  const [pagination, setPagination] = useState<PaginationState>({
+    pageIndex: 0,
+    pageSize: rowsPerPage,
+  });
+  const [globalSearchInput, setGlobalSearchInput] = useState("");
+  const [globalSearch, setGlobalSearch] = useState("");
 
   useEffect(() => {
     let cancelled = false;
@@ -122,7 +159,10 @@ export const KlevrList = ({
       }
 
       setRows(nextRows);
-      setPage(1);
+      setPagination((current) => ({ ...current, pageIndex: 0 }));
+      setColumnFilters([]);
+      setGlobalSearchInput("");
+      setGlobalSearch("");
       setLoading(false);
     };
 
@@ -133,43 +173,177 @@ export const KlevrList = ({
     };
   }, [dataSource, limit, recordFilterField, useRecordFilter]);
 
-  const sortedRows = useMemo(() => {
-    if (!enableSorting || !sortKey) {
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      setGlobalSearch(globalSearchInput.trim().toLowerCase());
+    }, 200);
+
+    return () => {
+      window.clearTimeout(timer);
+    };
+  }, [globalSearchInput]);
+
+  useEffect(() => {
+    setPagination((current) => ({
+      ...current,
+      pageIndex: 0,
+      pageSize: rowsPerPage,
+    }));
+  }, [rowsPerPage]);
+
+  const uniqueValuesByColumn = useMemo(() => {
+    return columns.reduce<Record<string, string[]>>((result, column) => {
+      result[column.key] = getUniqueColumnValues(rows, column.key);
+      return result;
+    }, {});
+  }, [columns, rows]);
+
+  const globallyFilteredRows = useMemo(() => {
+    if (!globalSearch) {
       return rows;
     }
 
-    return sortRows(rows, sortKey, sortAsc);
-  }, [enableSorting, rows, sortAsc, sortKey]);
+    const visibleKeys = columns
+      .filter((column) => columnVisibility[column.key] !== false)
+      .map((column) => column.key);
 
-  const totalPages = Math.max(1, Math.ceil(sortedRows.length / rowsPerPage));
+    const searchKeys = visibleKeys.length > 0 ? visibleKeys : columns.map((column) => column.key);
 
-  const visibleRows = useMemo(() => {
-    if (!enablePagination) {
-      return sortedRows;
+    return rows.filter((row) =>
+      searchKeys.some((key) => normalizeValue(row[key]).includes(globalSearch)),
+    );
+  }, [columnVisibility, columns, globalSearch, rows]);
+
+  const columnDefs = useMemo<ColumnDef<KlevrListRow>[]>(() => {
+    return columns.map((column) => ({
+      id: column.key,
+      accessorFn: (row) => row[column.key],
+      enableSorting,
+      filterFn: (row, id, filterValue) => {
+        const value = normalizeValue(row.getValue(id));
+
+        if (Array.isArray(filterValue)) {
+          if (filterValue.length === 0) {
+            return true;
+          }
+
+          return filterValue.some((option) => value === normalizeValue(option));
+        }
+
+        const textFilter = normalizeValue(filterValue);
+        if (!textFilter) {
+          return true;
+        }
+
+        return value.includes(textFilter);
+      },
+      header: ({ column: headerColumn }) => {
+        return enableSorting ? (
+          <button
+            className="inline-flex items-center gap-1 hover:text-foreground"
+            onClick={headerColumn.getToggleSortingHandler()}
+            type="button"
+          >
+            {column.label}
+            {headerColumn.getIsSorted() === "asc" ? (
+              <span aria-hidden="true" className="text-xs text-muted-foreground">
+                ↑
+              </span>
+            ) : null}
+            {headerColumn.getIsSorted() === "desc" ? (
+              <span aria-hidden="true" className="text-xs text-muted-foreground">
+                ↓
+              </span>
+            ) : null}
+          </button>
+        ) : (
+          column.label
+        );
+      },
+      cell: ({ row }) => {
+        const value = row.original[column.key];
+
+        if (column.template === "badge") {
+          return <Badge variant="secondary">{value == null ? "-" : String(value)}</Badge>;
+        }
+
+        if (column.template === "date") {
+          if (value == null) {
+            return "-";
+          }
+
+          const date = new Date(String(value));
+          return Number.isNaN(date.getTime()) ? String(value) : date.toLocaleDateString();
+        }
+
+        return value == null ? "-" : String(value);
+      },
+    }));
+  }, [columns, enableSorting]);
+
+  const table = useReactTable({
+    data: globallyFilteredRows,
+    columns: columnDefs,
+    state: {
+      sorting,
+      columnFilters,
+      columnVisibility,
+      pagination,
+    },
+    onSortingChange: setSorting,
+    onColumnFiltersChange: setColumnFilters,
+    onColumnVisibilityChange: setColumnVisibility,
+    onPaginationChange: setPagination,
+    getCoreRowModel: getCoreRowModel(),
+    getFilteredRowModel: getFilteredRowModel(),
+    getSortedRowModel: getSortedRowModel(),
+    getPaginationRowModel: getPaginationRowModel(),
+  });
+
+  const displayedRows = enablePagination ? table.getRowModel().rows : table.getPrePaginationRowModel().rows;
+
+  const totalPages = enablePagination ? Math.max(1, table.getPageCount()) : 1;
+  const currentPage = enablePagination ? pagination.pageIndex + 1 : 1;
+
+  const filterableColumns = table.getAllLeafColumns();
+
+  const columnLabels = useMemo(() => {
+    return columns.reduce<Record<string, string>>((result, column) => {
+      result[column.key] = column.label;
+      return result;
+    }, {});
+  }, [columns]);
+
+  const setTextFilter = (key: string, value: string) => {
+    table.getColumn(key)?.setFilterValue(value);
+    table.setPageIndex(0);
+  };
+
+  const toggleCategoricalFilter = (key: string, value: string) => {
+    const column = table.getColumn(key);
+    if (!column) {
+      return;
     }
 
-    const safePage = Math.min(page, totalPages);
-    const start = (safePage - 1) * rowsPerPage;
-    return sortedRows.slice(start, start + rowsPerPage);
-  }, [enablePagination, page, rowsPerPage, sortedRows, totalPages]);
+    const currentValue = column.getFilterValue();
+    const selected = Array.isArray(currentValue) ? currentValue.map(String) : [];
 
-  const formatCell = (row: Record<string, unknown>, column: KlevrListColumn) => {
-    const value = row[column.key];
+    const exists = selected.some((item) => normalizeValue(item) === normalizeValue(value));
+    const nextValue = exists
+      ? selected.filter((item) => normalizeValue(item) !== normalizeValue(value))
+      : [...selected, value];
 
-    if (column.template === "badge") {
-      return <Badge variant="secondary">{value == null ? "-" : String(value)}</Badge>;
-    }
+    column.setFilterValue(nextValue.length > 0 ? nextValue : undefined);
+    table.setPageIndex(0);
+  };
 
-    if (column.template === "date") {
-      if (value == null) {
-        return "-";
-      }
-
-      const date = new Date(String(value));
-      return Number.isNaN(date.getTime()) ? String(value) : date.toLocaleDateString();
-    }
-
-    return value == null ? "-" : String(value);
+  const clearAllFilters = () => {
+    setGlobalSearchInput("");
+    setGlobalSearch("");
+    table.resetColumnFilters();
+    table.resetGlobalFilter();
+    table.resetSorting();
+    table.setPageIndex(0);
   };
 
   return (
@@ -180,84 +354,171 @@ export const KlevrList = ({
         {loading ? <p className="text-sm text-muted-foreground">Loading list data...</p> : null}
 
         {!loading ? (
-          <Table>
-            <TableHeader>
-              <TableRow>
-                {columns.map((column, columnIndex) => {
-                  const columnInstanceKey = getColumnInstanceKey(column, columnIndex);
+          <>
+            <div className="flex flex-col gap-3 rounded-md border p-3">
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                <Input
+                  className="sm:max-w-xs"
+                  onChange={(event) => {
+                    setGlobalSearchInput(event.target.value);
+                    table.setPageIndex(0);
+                  }}
+                  placeholder="Search visible columns..."
+                  value={globalSearchInput}
+                />
+                <div className="flex items-center gap-2">
+                  <Button onClick={clearAllFilters} size="sm" type="button" variant="ghost">
+                    Clear filters
+                  </Button>
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button size="sm" type="button" variant="outline">
+                        Columns
+                        <ChevronDown className="h-4 w-4" />
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end" className="w-48">
+                      <DropdownMenuLabel>Toggle columns</DropdownMenuLabel>
+                      <DropdownMenuSeparator />
+                      {table.getAllLeafColumns().map((column) => (
+                        <DropdownMenuCheckboxItem
+                          checked={column.getIsVisible()}
+                          key={column.id}
+                          onCheckedChange={(value) => {
+                            column.toggleVisibility(Boolean(value));
+                          }}
+                        >
+                          {columnLabels[column.id] ?? column.id}
+                        </DropdownMenuCheckboxItem>
+                      ))}
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 gap-2 md:grid-cols-2 xl:grid-cols-3">
+                {filterableColumns.map((tableColumn) => {
+                  const columnConfig = columns.find((item) => item.key === tableColumn.id);
+                  if (!columnConfig) {
+                    return null;
+                  }
+
+                  const uniqueValues = uniqueValuesByColumn[columnConfig.key] ?? [];
+                  const categorical = isCategoricalColumn(columnConfig, uniqueValues);
+                  const filterValue = tableColumn.getFilterValue();
+                  const selectedValues = Array.isArray(filterValue) ? filterValue.map(String) : [];
 
                   return (
-                    <TableHead key={columnInstanceKey}>
-                      {enableSorting ? (
-                        <button
-                          className="inline-flex items-center gap-1 hover:text-foreground"
-                          onClick={() => {
-                            if (sortKey === column.key) {
-                              setSortAsc((current) => !current);
-                            } else {
-                              setSortKey(column.key);
-                              setSortAsc(true);
-                            }
-                          }}
-                          type="button"
-                        >
-                          {column.label}
-                          {sortKey === column.key ? (
-                            <span aria-hidden="true" className="text-xs text-muted-foreground">
-                              {sortAsc ? "↑" : "↓"}
-                            </span>
-                          ) : null}
-                        </button>
+                    <div className="flex flex-col gap-1" key={tableColumn.id}>
+                      <span className="text-xs text-muted-foreground">{columnConfig.label}</span>
+                      {categorical ? (
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button className="justify-between" size="sm" type="button" variant="outline">
+                              <span className="truncate">
+                                {selectedValues.length > 0
+                                  ? `${selectedValues.length} selected`
+                                  : `Filter ${columnConfig.label}`}
+                              </span>
+                              <ChevronDown className="h-4 w-4" />
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="start" className="w-56">
+                            <DropdownMenuLabel>{columnConfig.label}</DropdownMenuLabel>
+                            <DropdownMenuSeparator />
+                            {uniqueValues.length === 0 ? (
+                              <div className="px-2 py-1.5 text-xs text-muted-foreground">
+                                No options
+                              </div>
+                            ) : (
+                              uniqueValues.map((value) => (
+                                <DropdownMenuCheckboxItem
+                                  checked={selectedValues.some(
+                                    (item) => normalizeValue(item) === normalizeValue(value),
+                                  )}
+                                  key={value}
+                                  onCheckedChange={() => {
+                                    toggleCategoricalFilter(columnConfig.key, value);
+                                  }}
+                                >
+                                  {value}
+                                </DropdownMenuCheckboxItem>
+                              ))
+                            )}
+                          </DropdownMenuContent>
+                        </DropdownMenu>
                       ) : (
-                        column.label
+                        <Input
+                          className="h-8"
+                          onChange={(event) => {
+                            setTextFilter(columnConfig.key, event.target.value);
+                          }}
+                          placeholder={`Search ${columnConfig.label}`}
+                          value={typeof filterValue === "string" ? filterValue : ""}
+                        />
                       )}
-                    </TableHead>
+                    </div>
                   );
                 })}
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {visibleRows.length === 0 ? (
-                <TableRow>
-                  <TableCell className="text-muted-foreground" colSpan={Math.max(columns.length, 1)}>
-                    No records found
-                  </TableCell>
-                </TableRow>
-              ) : (
-                visibleRows.map((row, index) => (
-                  <TableRow key={`${String(row.id ?? "row")}-${index}`}>
-                    {columns.map((column, columnIndex) => {
-                      const columnInstanceKey = getColumnInstanceKey(column, columnIndex);
+              </div>
+            </div>
 
-                      return (
-                        <TableCell key={`${columnInstanceKey}-row-${index}`}>
-                          {formatCell(row, column)}
-                        </TableCell>
-                      );
-                    })}
+            <Table>
+              <TableHeader>
+                {table.getHeaderGroups().map((headerGroup) => (
+                  <TableRow key={headerGroup.id}>
+                    {headerGroup.headers.map((header) => (
+                      <TableHead key={header.id}>
+                        {header.isPlaceholder
+                          ? null
+                          : flexRender(header.column.columnDef.header, header.getContext())}
+                      </TableHead>
+                    ))}
                   </TableRow>
-                ))
-              )}
-            </TableBody>
-          </Table>
+                ))}
+              </TableHeader>
+              <TableBody>
+                {displayedRows.length === 0 ? (
+                  <TableRow>
+                    <TableCell
+                      className="text-muted-foreground"
+                      colSpan={Math.max(table.getVisibleLeafColumns().length, 1)}
+                    >
+                      No records found
+                    </TableCell>
+                  </TableRow>
+                ) : (
+                  displayedRows.map((row) => (
+                    <TableRow key={row.id}>
+                      {row.getVisibleCells().map((cell) => (
+                        <TableCell key={cell.id}>
+                          {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                        </TableCell>
+                      ))}
+                    </TableRow>
+                  ))
+                )}
+              </TableBody>
+            </Table>
+          </>
         ) : null}
 
         {enablePagination && totalPages > 1 ? (
           <div className="flex items-center justify-end gap-2">
             <Button
-              disabled={page <= 1}
-              onClick={() => setPage((current) => Math.max(1, current - 1))}
+              disabled={!table.getCanPreviousPage()}
+              onClick={() => table.previousPage()}
               size="sm"
               variant="outline"
             >
               Previous
             </Button>
             <span className="text-xs text-muted-foreground">
-              Page {page} of {totalPages}
+              Page {currentPage} of {totalPages}
             </span>
             <Button
-              disabled={page >= totalPages}
-              onClick={() => setPage((current) => Math.min(totalPages, current + 1))}
+              disabled={!table.getCanNextPage()}
+              onClick={() => table.nextPage()}
               size="sm"
               variant="outline"
             >
