@@ -1,0 +1,7 @@
+[
+  { "id": "1", "name": "Project Alpha", "status": "Active", "progress": 75 },
+  { "id": "2", "name": "Project Beta", "status": "Planning", "progress": 25 },
+  { "id": "3", "name": "Project Gamma", "status": "Complete", "progress": 100 },
+  { "id": "4", "name": "Project Delta", "status": "Active", "progress": 60 },
+  { "id": "5", "name": "Project Epsilon", "status": "On Hold", "progress": 40 }
+]

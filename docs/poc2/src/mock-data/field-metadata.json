@@ -1,0 +1,100 @@
+{
+  "customers": {
+    "name": {
+      "dataType": "text",
+      "label": "Customer name",
+      "placeholder": "Enter customer name",
+      "helperText": "Shown as the primary display name.",
+      "required": true,
+      "maxLength": 120
+    },
+    "notes": {
+      "dataType": "multiline",
+      "label": "Notes",
+      "placeholder": "Add notes",
+      "helperText": "Internal notes for this customer.",
+      "rows": 5,
+      "maxLength": 1000
+    },
+    "status": {
+      "dataType": "choice-single",
+      "label": "Status",
+      "placeholder": "Select status",
+      "required": true,
+      "options": [
+        { "label": "Active", "value": "active" },
+        { "label": "Pending", "value": "pending" },
+        { "label": "Inactive", "value": "inactive" }
+      ]
+    },
+    "segments": {
+      "dataType": "choice-multi",
+      "label": "Segments",
+      "placeholder": "Select segments",
+      "options": [
+        { "label": "Enterprise", "value": "enterprise" },
+        { "label": "SMB", "value": "smb" },
+        { "label": "Public Sector", "value": "public-sector" }
+      ],
+      "defaultValue": ["enterprise"]
+    },
+    "isPreferred": {
+      "dataType": "boolean",
+      "label": "Preferred customer",
+      "helperText": "Enable for priority handling.",
+      "defaultValue": true
+    },
+    "signupDate": {
+      "dataType": "date",
+      "label": "Signup date",
+      "required": true
+    },
+    "nextReviewAt": {
+      "dataType": "datetime",
+      "label": "Next review",
+      "helperText": "Include date and time."
+    },
+    "creditLimit": {
+      "dataType": "currency",
+      "label": "Credit limit",
+      "placeholder": "0.00",
+      "currencySymbol": "$",
+      "min": 0,
+      "max": 1000000,
+      "defaultValue": 25000
+    },
+    "riskScore": {
+      "dataType": "decimal",
+      "label": "Risk score",
+      "placeholder": "0.00",
+      "decimalPlaces": 2,
+      "min": 0,
+      "max": 100
+    },
+    "employeeCount": {
+      "dataType": "whole-number",
+      "label": "Employee count",
+      "placeholder": "Enter whole number",
+      "min": 1,
+      "max": 100000
+    },
+    "email": {
+      "dataType": "email",
+      "label": "Contact email",
+      "placeholder": "name@example.com",
+      "required": true
+    },
+    "website": {
+      "dataType": "url",
+      "label": "Website",
+      "placeholder": "https://example.com"
+    },
+    "supportingDocument": {
+      "dataType": "file",
+      "label": "Supporting document",
+      "accept": ".pdf,.doc,.docx",
+      "multiple": false,
+      "maxFileSizeMb": 10
+    }
+  }
+}

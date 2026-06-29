@@ -1,0 +1,6 @@
+[
+  { "id": "1", "name": "Acme Corp", "email": "contact@acme.com" },
+  { "id": "2", "name": "TechStart Inc", "email": "hello@techstart.com" },
+  { "id": "3", "name": "Global Solutions", "email": "info@global.com" },
+  { "id": "4", "name": "Local Services Ltd", "email": "support@local.com" }
+]

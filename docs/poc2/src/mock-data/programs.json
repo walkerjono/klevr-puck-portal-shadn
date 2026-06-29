@@ -1,0 +1,38 @@
+[
+  {
+    "id": "1",
+    "name": "Community Outreach",
+    "description": "Programs for local communities",
+    "status": "Active",
+    "region": "North",
+    "participants": 420,
+    "budget": 180000
+  },
+  {
+    "id": "2",
+    "name": "Youth Development",
+    "description": "Programs for young people",
+    "status": "Active",
+    "region": "Central",
+    "participants": 650,
+    "budget": 260000
+  },
+  {
+    "id": "3",
+    "name": "Environmental",
+    "description": "Environmental conservation programs",
+    "status": "Planning",
+    "region": "South",
+    "participants": 210,
+    "budget": 120000
+  },
+  {
+    "id": "4",
+    "name": "Education",
+    "description": "Educational programs",
+    "status": "Active",
+    "region": "East",
+    "participants": 780,
+    "budget": 340000
+  }
+]
