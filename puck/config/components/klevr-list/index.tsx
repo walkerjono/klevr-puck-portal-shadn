@@ -1,0 +1,77 @@
+import { ComponentConfig } from "@puckeditor/core";
+import { KlevrList, type KlevrListProps } from "@/puck/config/components/klevr-list/klevr-list";
+import { padding, paddingDefaults } from "@/puck/config/fields";
+
+export type { KlevrListProps };
+
+const conf: ComponentConfig<KlevrListProps> = {
+  fields: {
+    title: { type: "text" },
+    dataSource: { type: "text" },
+    columns: {
+      type: "array",
+      arrayFields: {
+        key: { type: "text" },
+        label: { type: "text" },
+        template: {
+          type: "select",
+          options: [
+            { label: "default", value: "default" },
+            { label: "badge", value: "badge" },
+            { label: "date", value: "date" },
+          ],
+        },
+      },
+      getItemSummary: (item: KlevrListProps["columns"][number], index = 0) =>
+        item.label || `Column ${index + 1}`,
+    },
+    limit: { type: "number", min: 1 },
+    useRecordFilter: {
+      type: "radio",
+      options: [
+        { label: "false", value: false },
+        { label: "true", value: true },
+      ],
+    },
+    recordFilterField: { type: "text" },
+    enablePagination: {
+      type: "radio",
+      options: [
+        { label: "false", value: false },
+        { label: "true", value: true },
+      ],
+    },
+    rowsPerPage: { type: "number", min: 1 },
+    enableSorting: {
+      type: "radio",
+      options: [
+        { label: "false", value: false },
+        { label: "true", value: true },
+      ],
+    },
+    padding,
+  },
+  defaultProps: {
+    title: "Project table",
+    dataSource: "/api/mock/projects",
+    columns: [
+      { key: "name", label: "Name", template: "default" },
+      { key: "status", label: "Status", template: "badge" },
+      { key: "progress", label: "Progress", template: "default" },
+    ],
+    limit: 10,
+    useRecordFilter: false,
+    recordFilterField: "id",
+    enablePagination: false,
+    rowsPerPage: 10,
+    enableSorting: true,
+    padding: {
+      ...paddingDefaults,
+      top: "none",
+      bottom: "none",
+    },
+  },
+  render: KlevrList,
+};
+
+export default conf;

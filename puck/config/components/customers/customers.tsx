@@ -84,7 +84,7 @@ export const Customers = ({
           })}
         >
           {isInlineLayout ? (
-            <div className="bg-gradient-to-r from-background via-white/0 to-background z-10 absolute left-0 top-0 right-0 bottom-0 w-full h-full" />
+            <div className="bg-linear-to-r from-background via-white/0 to-background z-10 absolute left-0 top-0 right-0 bottom-0 w-full h-full" />
           ) : null}
           <Carousel
             setApi={setApi}

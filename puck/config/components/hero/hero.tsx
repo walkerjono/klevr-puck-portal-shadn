@@ -174,7 +174,12 @@ const HeroAnimatedAdjectives = ({
     () => adjectives.map((adjective) => adjective.adjective),
     [adjectives]
   );
+  const [isMounted, setIsMounted] = useState(false);
   const [titleNumber, setTitleNumber] = useState(0);
+
+  useEffect(() => {
+    setIsMounted(true);
+  }, []);
 
   useEffect(() => {
     if (prefersReducedMotion) {
@@ -199,7 +204,8 @@ const HeroAnimatedAdjectives = ({
     }
   );
 
-  if (prefersReducedMotion) {
+  // Keep SSR and first client paint deterministic to avoid hydration mismatch.
+  if (!isMounted || prefersReducedMotion) {
     return <span className={classNames}>{titles[0]}</span>;
   }
 
@@ -240,7 +246,7 @@ const ImageSingle = ({
     <div className="w-full">
       <div
         className={cn("bg-muted rounded-md", {
-          "aspect-16/9": aspectRatio === "16x9" || !aspectRatio,
+          "aspect-video": aspectRatio === "16x9" || !aspectRatio,
           "aspect-square": aspectRatio === "1x1",
         })}
       >

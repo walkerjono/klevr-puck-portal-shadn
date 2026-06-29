@@ -1,0 +1,38 @@
+[
+  {
+    "id": "1",
+    "name": "Acme Corp",
+    "status": "active",
+    "segments": ["enterprise", "public-sector"],
+    "isPreferred": true,
+    "signupDate": "2025-01-15",
+    "nextReviewAt": "2026-07-10T09:30:00"
+  },
+  {
+    "id": "2",
+    "name": "TechStart Inc",
+    "status": "pending",
+    "segments": ["smb"],
+    "isPreferred": false,
+    "signupDate": "2025-03-22",
+    "nextReviewAt": "2026-07-12T14:00:00"
+  },
+  {
+    "id": "3",
+    "name": "Global Solutions",
+    "status": "active",
+    "segments": ["enterprise"],
+    "isPreferred": true,
+    "signupDate": "2024-11-05",
+    "nextReviewAt": "2026-07-18T11:15:00"
+  },
+  {
+    "id": "4",
+    "name": "Local Services Ltd",
+    "status": "inactive",
+    "segments": ["smb", "public-sector"],
+    "isPreferred": false,
+    "signupDate": "2025-06-30",
+    "nextReviewAt": "2026-08-01T16:45:00"
+  }
+]

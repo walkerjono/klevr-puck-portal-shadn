@@ -3,7 +3,7 @@
 import type { Data } from "@puckeditor/core";
 import { Puck } from "@puckeditor/core";
 import { createAiPlugin } from "@puckeditor/plugin-ai";
-import config, { EditorModeProvider } from "@/puck";
+import config, { EditorModeProvider } from "@/puck/index";
 
 const aiPlugin = createAiPlugin();
 

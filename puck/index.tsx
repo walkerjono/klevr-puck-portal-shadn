@@ -48,6 +48,15 @@ import ContactUs, {
 import Footer, {
   FooterProps,
 } from "@/puck/config/components/footer";
+import KlevrField, {
+  KlevrFieldProps,
+} from "@/puck/config/components/klevr-field";
+import KlevrList, {
+  KlevrListProps,
+} from "@/puck/config/components/klevr-list";
+import BlockContainer, {
+  BlockContainerProps,
+} from "@/puck/config/components/block-container";
 import Root from "@/puck/components/root";
 
 export type Props = {
@@ -67,6 +76,9 @@ export type Props = {
   Pricing: PricingProps;
   ContactUs: ContactUsProps;
   Footer: FooterProps;
+  KlevrField: KlevrFieldProps;
+  KlevrList: KlevrListProps;
+  BlockContainer: BlockContainerProps;
 };
 
 export type Config = PuckConfig<Props>;
@@ -90,6 +102,7 @@ export const conf: Config = {
         "Articles",
         "Faq",
         "Cta",
+        "BlockContainer",
       ],
     },
     socialProof: {
@@ -98,6 +111,10 @@ export const conf: Config = {
     },
     business: {
       components: ["Pricing", "ContactUs"],
+    },
+    klevr: {
+      title: "Klevr",
+      components: ["KlevrField", "KlevrList"],
     },
   },
   components: {
@@ -117,6 +134,9 @@ export const conf: Config = {
     Pricing,
     ContactUs,
     Footer,
+    KlevrField,
+    KlevrList,
+    BlockContainer,
   },
   root: Root,
 };

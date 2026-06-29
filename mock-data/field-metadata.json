@@ -1,0 +1,49 @@
+{
+  "customers": {
+    "name": {
+      "dataType": "text",
+      "label": "Customer name",
+      "placeholder": "Enter customer name",
+      "helperText": "Shown as the primary display name.",
+      "required": true
+    },
+    "status": {
+      "dataType": "choice-single",
+      "label": "Status",
+      "placeholder": "Select status",
+      "required": true,
+      "options": [
+        { "label": "Active", "value": "active" },
+        { "label": "Pending", "value": "pending" },
+        { "label": "Inactive", "value": "inactive" }
+      ]
+    },
+    "segments": {
+      "dataType": "choice-multi",
+      "label": "Segments",
+      "placeholder": "Select segments",
+      "options": [
+        { "label": "Enterprise", "value": "enterprise" },
+        { "label": "SMB", "value": "smb" },
+        { "label": "Public Sector", "value": "public-sector" }
+      ],
+      "defaultValue": ["enterprise"]
+    },
+    "isPreferred": {
+      "dataType": "boolean",
+      "label": "Preferred customer",
+      "helperText": "Enable for priority handling.",
+      "defaultValue": true
+    },
+    "signupDate": {
+      "dataType": "date",
+      "label": "Signup date",
+      "required": true
+    },
+    "nextReviewAt": {
+      "dataType": "datetime",
+      "label": "Next review",
+      "helperText": "Include date and time."
+    }
+  }
+}
