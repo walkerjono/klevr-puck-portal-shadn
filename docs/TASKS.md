@@ -16,13 +16,14 @@ TODO:
 - [-] klevr-list column filter based on datatype (date range, numeric range, categorical)
     - shouldn't need datatype in database.json, it should read type from metdata
 
-- [ ] donation component:
+- [-] donation component:
     - Use Hero as a starting point
     - Add a full background image
-    - Relace existing images with donation control with 3 sub-pages
+    - Replace existing images with donation control with 3 sub-pages
         - 1. Donate frequency (once|recurring), amount
         - 2. Details: name, email, phone address, on behalf of company, keep anonymous etc
         - 3. Payment: credit card details, cover platform costs
     - donation control should be aware of page theme i.e. colours
     - text should be configurable
     - refer to screenshot for example
+    - status: initial implementation complete; validate and polish UX/styling

@@ -45,6 +45,9 @@ import Pricing, {
 import ContactUs, {
   ContactUsProps,
 } from "@/puck/config/components/contact-us";
+import Donation, {
+  DonationProps,
+} from "@/puck/config/components/donation";
 import Footer, {
   FooterProps,
 } from "@/puck/config/components/footer";
@@ -75,6 +78,7 @@ export type Props = {
   Cta: CtaProps;
   Pricing: PricingProps;
   ContactUs: ContactUsProps;
+  Donation: DonationProps;
   Footer: FooterProps;
   KlevrField: KlevrFieldProps;
   KlevrList: KlevrListProps;
@@ -110,7 +114,7 @@ export const conf: Config = {
       components: ["Testimonials", "Stats", "Customers"],
     },
     business: {
-      components: ["Pricing", "ContactUs"],
+      components: ["Pricing", "ContactUs", "Donation"],
     },
     klevr: {
       title: "Klevr",
@@ -133,6 +137,7 @@ export const conf: Config = {
     Cta,
     Pricing,
     ContactUs,
+    Donation,
     Footer,
     KlevrField,
     KlevrList,
