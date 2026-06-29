@@ -8,6 +8,11 @@ const conf: ComponentConfig<KlevrListProps> = {
   fields: {
     title: { type: "text" },
     dataSource: { type: "text" },
+    entity: { type: "text" },
+    metadataSource: { 
+      type: "text",
+      label: "Metadata Source"
+    },
     columns: {
       type: "array",
       arrayFields: {
@@ -19,6 +24,18 @@ const conf: ComponentConfig<KlevrListProps> = {
             { label: "default", value: "default" },
             { label: "badge", value: "badge" },
             { label: "date", value: "date" },
+          ],
+        },
+        dataType: {
+          type: "select",
+          options: [
+            { label: "text", value: "text" },
+            { label: "choice-single", value: "choice-single" },
+            { label: "choice-multi", value: "choice-multi" },
+            { label: "boolean", value: "boolean" },
+            { label: "date", value: "date" },
+            { label: "datetime", value: "datetime" },
+            { label: "number", value: "number" },
           ],
         },
       },
@@ -82,10 +99,14 @@ const conf: ComponentConfig<KlevrListProps> = {
   defaultProps: {
     title: "Project table",
     dataSource: "/api/mock/projects",
+    entity: "projects",
+    metadataSource: "/api/mock/field-metadata",
     columns: [
-      { key: "name", label: "Name", template: "default" },
-      { key: "status", label: "Status", template: "badge" },
-      { key: "progress", label: "Progress", template: "default" },
+      { key: "name", label: "Name", template: "default", dataType: "text" },
+      { key: "status", label: "Status", template: "badge", dataType: "choice-single" },
+      { key: "progress", label: "Progress", template: "default", dataType: "number" },
+      { key: "start", label: "Start", template: "default", dataType: "date" },
+      { key: "end", label: "End", template: "default", dataType: "date" },
     ],
     limit: 10,
     useRecordFilter: false,

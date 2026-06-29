@@ -45,5 +45,49 @@
       "label": "Next review",
       "helperText": "Include date and time."
     }
+  },
+  "projects": {
+    "name": {
+      "dataType": "text",
+      "label": "Project name",
+      "placeholder": "Enter project name",
+      "required": true
+    },
+    "status": {
+      "dataType": "choice-single",
+      "label": "Status",
+      "placeholder": "Select status",
+      "required": true,
+      "options": [
+        { "label": "Active", "value": "Active" },
+        { "label": "Planning", "value": "Planning" },
+        { "label": "Complete", "value": "Complete" },
+        { "label": "On Hold", "value": "On Hold" }
+      ]
+    },
+    "progress": {
+      "dataType": "number",
+      "label": "Progress",
+      "placeholder": "0-100",
+      "min": 0,
+      "max": 100,
+      "required": true
+    },
+    "customerId": {
+      "dataType": "text",
+      "label": "Customer ID",
+      "placeholder": "Select customer",
+      "required": true
+    },
+    "start": {
+      "dataType": "date",
+      "label": "Start date",
+      "required": true
+    },
+    "end": {
+      "dataType": "date",
+      "label": "End date",
+      "required": true
+    }
   }
 }

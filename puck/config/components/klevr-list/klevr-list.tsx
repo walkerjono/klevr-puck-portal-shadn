@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import {
   type ColumnDef,
   type ColumnFiltersState,
+  type FilterFn,
   flexRender,
   getCoreRowModel,
   getFilteredRowModel,
@@ -14,7 +15,7 @@ import {
   useReactTable,
   type VisibilityState,
 } from "@tanstack/react-table";
-import { ChevronDown } from "lucide-react";
+import { ChevronDown, X } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -36,11 +37,23 @@ import {
 } from "@/components/ui/table";
 import { CompoundContainer, type CompoundContainerProps } from "@/puck/components/container";
 import { fetchEntityListBySource } from "@/lib/klevr/api/entities";
+import {
+  type KlevrFieldDataType,
+  type FilterableColumnMetadata,
+  type KlevrFieldMetadata,
+  fetchEntityMetadata,
+  getFilterType,
+  dateRangeFilter,
+  numericRangeFilter,
+  formatDateForInput,
+  parseDateFromInput,
+} from "./filter-utils";
 
 export interface KlevrListColumn {
   key: string;
   label: string;
   template?: "default" | "badge" | "date";
+  dataType?: KlevrFieldDataType;
 }
 
 export interface KlevrListProps {
@@ -49,6 +62,8 @@ export interface KlevrListProps {
   title: string;
   dataSource: string;
   columns: KlevrListColumn[];
+  entity?: string;
+  metadataSource?: string;
   limit?: number;
   useRecordFilter?: boolean;
   recordFilterField?: string;
@@ -106,6 +121,8 @@ export const KlevrList = ({
   title,
   dataSource,
   columns,
+  entity,
+  metadataSource = "/api/mock/field-metadata",
   limit,
   useRecordFilter = false,
   recordFilterField = "id",
@@ -121,6 +138,7 @@ export const KlevrList = ({
   const [rows, setRows] = useState<KlevrListRow[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [columnMetadata, setColumnMetadata] = useState<Record<string, KlevrFieldMetadata | null>>({});
 
   const [sorting, setSorting] = useState<SortingState>([]);
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([]);
@@ -131,6 +149,7 @@ export const KlevrList = ({
   });
   const [globalSearchInput, setGlobalSearchInput] = useState("");
   const [globalSearch, setGlobalSearch] = useState("");
+  const [facetOptionSearchByColumn, setFacetOptionSearchByColumn] = useState<Record<string, string>>({});
 
   useEffect(() => {
     let cancelled = false;
@@ -169,6 +188,7 @@ export const KlevrList = ({
       setRows(nextRows);
       setPagination((current) => ({ ...current, pageIndex: 0 }));
       setColumnFilters([]);
+      setFacetOptionSearchByColumn({});
       setGlobalSearchInput("");
       setGlobalSearch("");
       setLoading(false);
@@ -180,6 +200,24 @@ export const KlevrList = ({
       cancelled = true;
     };
   }, [dataSource, limit, recordFilterField, useRecordFilter]);
+
+  // Fetch metadata for columns if entity is provided
+  useEffect(() => {
+    if (!entity || !enableFacetFilters) {
+      return;
+    }
+
+    const loadMetadata = async () => {
+      const metadata = await fetchEntityMetadata(
+        entity,
+        columns.map((col) => col.key),
+        metadataSource,
+      );
+      setColumnMetadata(metadata);
+    };
+
+    loadMetadata();
+  }, [entity, columns, enableFacetFilters, metadataSource]);
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
@@ -241,71 +279,94 @@ export const KlevrList = ({
   }, [columnVisibility, columns, enableSearch, globalSearch, rows]);
 
   const columnDefs = useMemo<ColumnDef<KlevrListRow>[]>(() => {
-    return columns.map((column) => ({
-      id: column.key,
-      accessorFn: (row) => row[column.key],
-      enableSorting,
-      filterFn: (row, id, filterValue) => {
-        const value = normalizeValue(row.getValue(id));
+    const includesStringFilter: FilterFn<KlevrListRow> = (row, id, filterValue) => {
+      const value = normalizeValue(row.getValue(id));
 
-        if (Array.isArray(filterValue)) {
-          if (filterValue.length === 0) {
-            return true;
-          }
-
-          return filterValue.some((option) => value === normalizeValue(option));
-        }
-
-        const textFilter = normalizeValue(filterValue);
-        if (!textFilter) {
+      if (Array.isArray(filterValue)) {
+        if (filterValue.length === 0) {
           return true;
         }
 
-        return value.includes(textFilter);
-      },
-      header: ({ column: headerColumn }) => {
-        return enableSorting ? (
-          <button
-            className="inline-flex items-center gap-1 hover:text-foreground"
-            onClick={headerColumn.getToggleSortingHandler()}
-            type="button"
-          >
-            {column.label}
-            {headerColumn.getIsSorted() === "asc" ? (
-              <span aria-hidden="true" className="text-xs text-muted-foreground">
-                ↑
-              </span>
-            ) : null}
-            {headerColumn.getIsSorted() === "desc" ? (
-              <span aria-hidden="true" className="text-xs text-muted-foreground">
-                ↓
-              </span>
-            ) : null}
-          </button>
-        ) : (
-          column.label
-        );
-      },
-      cell: ({ row }) => {
-        const value = row.original[column.key];
+        return filterValue.some((option) => value === normalizeValue(option));
+      }
 
-        if (column.template === "badge") {
-          return <Badge variant="secondary">{value == null ? "-" : String(value)}</Badge>;
-        }
+      const textFilter = normalizeValue(filterValue);
+      if (!textFilter) {
+        return true;
+      }
 
-        if (column.template === "date") {
-          if (value == null) {
-            return "-";
+      return value.includes(textFilter);
+    };
+
+    const dateRangeFilterFn: FilterFn<KlevrListRow> = (row, id, filterValue) => {
+      return dateRangeFilter(row.getValue(id), filterValue);
+    };
+
+    const numericRangeFilterFn: FilterFn<KlevrListRow> = (row, id, filterValue) => {
+      return numericRangeFilter(row.getValue(id), filterValue);
+    };
+
+    return columns.map((column, index) => {
+      const metadata = entity ? columnMetadata[column.key] : null;
+      const dataType = column.dataType ?? metadata?.dataType ?? "text";
+      const filterType = getFilterType(dataType);
+
+      let filterFn: FilterFn<KlevrListRow> = includesStringFilter;
+      if (filterType === "date-range") {
+        filterFn = dateRangeFilterFn;
+      } else if (filterType === "numeric-range") {
+        filterFn = numericRangeFilterFn;
+      }
+
+      return {
+        id: column.key || `column-${index}`,
+        accessorFn: (row) => row[column.key],
+        enableSorting,
+        filterFn,
+        header: ({ column: headerColumn }) => {
+          return enableSorting ? (
+            <button
+              className="inline-flex items-center gap-1 hover:text-foreground"
+              onClick={headerColumn.getToggleSortingHandler()}
+              type="button"
+            >
+              {column.label}
+              {headerColumn.getIsSorted() === "asc" ? (
+                <span aria-hidden="true" className="text-xs text-muted-foreground">
+                  ↑
+                </span>
+              ) : null}
+              {headerColumn.getIsSorted() === "desc" ? (
+                <span aria-hidden="true" className="text-xs text-muted-foreground">
+                  ↓
+                </span>
+              ) : null}
+            </button>
+          ) : (
+            column.label
+          );
+        },
+        cell: ({ row }) => {
+          const value = row.original[column.key];
+
+          if (column.template === "badge") {
+            return <Badge variant="secondary">{value == null ? "-" : String(value)}</Badge>;
           }
 
-          const date = new Date(String(value));
-          return Number.isNaN(date.getTime()) ? String(value) : date.toLocaleDateString();
-        }
+          if (column.template === "date") {
+            if (value == null) {
+              return "-";
+            }
 
-        return value == null ? "-" : String(value);
-      },
-    }));
-  }, [columns, enableSorting]);
+            const date = new Date(String(value));
+            return Number.isNaN(date.getTime()) ? String(value) : date.toLocaleDateString();
+          }
+
+          return value == null ? "-" : String(value);
+        },
+      };
+    });
+  }, [columns, enableSorting, entity, columnMetadata]);
 
   const table = useReactTable({
     data: globallyFilteredRows,
@@ -366,6 +427,7 @@ export const KlevrList = ({
   };
 
   const clearAllFilters = () => {
+    setFacetOptionSearchByColumn({});
     setGlobalSearchInput("");
     setGlobalSearch("");
     table.resetColumnFilters();
@@ -383,22 +445,30 @@ export const KlevrList = ({
             return null;
           }
 
-          const uniqueValues = uniqueValuesByColumn[columnConfig.key] ?? [];
-          const categorical = isCategoricalColumn(columnConfig, uniqueValues);
-          const filterValue = tableColumn.getFilterValue();
-          const selectedValues = Array.isArray(filterValue) ? filterValue.map(String) : [];
+          const metadata = entity ? columnMetadata[columnConfig.key] : null;
+          const dataType = columnConfig.dataType ?? metadata?.dataType ?? "text";
+          const filterType = getFilterType(dataType);
 
-          return (
-            <div
-              className={
-                layout === "vertical"
-                  ? "flex flex-col gap-1"
-                  : "flex min-w-45 flex-1 flex-col gap-1"
-              }
-              key={tableColumn.id}
-            >
-              <span className="text-xs text-muted-foreground">{columnConfig.label}</span>
-              {categorical ? (
+          // Categorical filter (choice-single, choice-multi, boolean)
+          if (filterType === "categorical") {
+            const uniqueValues = uniqueValuesByColumn[columnConfig.key] ?? [];
+            const filterValue = tableColumn.getFilterValue();
+            const selectedValues = Array.isArray(filterValue) ? filterValue.map(String) : [];
+            const optionSearch = facetOptionSearchByColumn[columnConfig.key] ?? "";
+            const filteredUniqueValues = uniqueValues.filter((value) =>
+              normalizeValue(value).includes(normalizeValue(optionSearch)),
+            );
+
+            return (
+              <div
+                className={
+                  layout === "vertical"
+                    ? "flex flex-col gap-1"
+                    : "flex min-w-45 flex-1 flex-col gap-1"
+                }
+                key={tableColumn.id}
+              >
+                <span className="text-xs text-muted-foreground">{columnConfig.label}</span>
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
                     <Button className="justify-between" size="sm" type="button" variant="outline">
@@ -413,10 +483,23 @@ export const KlevrList = ({
                   <DropdownMenuContent align="start" className="w-56">
                     <DropdownMenuLabel>{columnConfig.label}</DropdownMenuLabel>
                     <DropdownMenuSeparator />
-                    {uniqueValues.length === 0 ? (
+                    <div className="px-2 pb-2">
+                      <Input
+                        className="h-8"
+                        onChange={(event) => {
+                          setFacetOptionSearchByColumn((current) => ({
+                            ...current,
+                            [columnConfig.key]: event.target.value,
+                          }));
+                        }}
+                        placeholder="Search options..."
+                        value={optionSearch}
+                      />
+                    </div>
+                    {filteredUniqueValues.length === 0 ? (
                       <div className="px-2 py-1.5 text-xs text-muted-foreground">No options</div>
                     ) : (
-                      uniqueValues.map((value) => (
+                      filteredUniqueValues.map((value) => (
                         <DropdownMenuCheckboxItem
                           checked={selectedValues.some(
                             (item) => normalizeValue(item) === normalizeValue(value),
@@ -425,6 +508,9 @@ export const KlevrList = ({
                           onCheckedChange={() => {
                             toggleCategoricalFilter(columnConfig.key, value);
                           }}
+                          onSelect={(event) => {
+                            event.preventDefault();
+                          }}
                         >
                           {value}
                         </DropdownMenuCheckboxItem>
@@ -432,16 +518,116 @@ export const KlevrList = ({
                     )}
                   </DropdownMenuContent>
                 </DropdownMenu>
-              ) : (
-                <Input
-                  className="h-8"
-                  onChange={(event) => {
-                    setTextFilter(columnConfig.key, event.target.value);
-                  }}
-                  placeholder={`Search ${columnConfig.label}`}
-                  value={typeof filterValue === "string" ? filterValue : ""}
-                />
-              )}
+              </div>
+            );
+          }
+
+          // Date range filter
+          if (filterType === "date-range") {
+            const filterValue = tableColumn.getFilterValue() as [string | null, string | null] | undefined;
+            const [fromDate, toDate] = filterValue ?? [null, null];
+
+            return (
+              <div
+                className={
+                  layout === "vertical"
+                    ? "flex flex-col gap-1"
+                    : "flex min-w-60 flex-1 flex-col gap-1"
+                }
+                key={tableColumn.id}
+              >
+                <span className="text-xs text-muted-foreground">{columnConfig.label}</span>
+                <div className="flex gap-1">
+                  <Input
+                    className="h-8 flex-1"
+                    onChange={(event) => {
+                      const newFrom = event.target.value || null;
+                      tableColumn.setFilterValue([newFrom, toDate] as any);
+                      table.setPageIndex(0);
+                    }}
+                    placeholder="From"
+                    type="date"
+                    value={fromDate ?? ""}
+                  />
+                  <Input
+                    className="h-8 flex-1"
+                    onChange={(event) => {
+                      const newTo = event.target.value || null;
+                      tableColumn.setFilterValue([fromDate, newTo] as any);
+                      table.setPageIndex(0);
+                    }}
+                    placeholder="To"
+                    type="date"
+                    value={toDate ?? ""}
+                  />
+                </div>
+              </div>
+            );
+          }
+
+          // Numeric range filter
+          if (filterType === "numeric-range") {
+            const filterValue = tableColumn.getFilterValue() as [number | null, number | null] | undefined;
+            const [minVal, maxVal] = filterValue ?? [null, null];
+
+            return (
+              <div
+                className={
+                  layout === "vertical"
+                    ? "flex flex-col gap-1"
+                    : "flex min-w-60 flex-1 flex-col gap-1"
+                }
+                key={tableColumn.id}
+              >
+                <span className="text-xs text-muted-foreground">{columnConfig.label}</span>
+                <div className="flex gap-1">
+                  <Input
+                    className="h-8 flex-1"
+                    onChange={(event) => {
+                      const val = event.target.value ? Number(event.target.value) : null;
+                      tableColumn.setFilterValue([val, maxVal] as any);
+                      table.setPageIndex(0);
+                    }}
+                    placeholder="Min"
+                    type="number"
+                    value={minVal ?? ""}
+                  />
+                  <Input
+                    className="h-8 flex-1"
+                    onChange={(event) => {
+                      const val = event.target.value ? Number(event.target.value) : null;
+                      tableColumn.setFilterValue([minVal, val] as any);
+                      table.setPageIndex(0);
+                    }}
+                    placeholder="Max"
+                    type="number"
+                    value={maxVal ?? ""}
+                  />
+                </div>
+              </div>
+            );
+          }
+
+          // Default text filter
+          const filterValue = tableColumn.getFilterValue();
+          return (
+            <div
+              className={
+                layout === "vertical"
+                  ? "flex flex-col gap-1"
+                  : "flex min-w-45 flex-1 flex-col gap-1"
+              }
+              key={tableColumn.id}
+            >
+              <span className="text-xs text-muted-foreground">{columnConfig.label}</span>
+              <Input
+                className="h-8"
+                onChange={(event) => {
+                  setTextFilter(columnConfig.key, event.target.value);
+                }}
+                placeholder={`Search ${columnConfig.label}`}
+                value={typeof filterValue === "string" ? filterValue : ""}
+              />
             </div>
           );
         })}
@@ -510,7 +696,7 @@ export const KlevrList = ({
                 : null}
             </div>
 
-            <div className={isVerticalFacetLayout ? "grid gap-4 md:grid-cols-3" : "block"}>
+            <div className={isVerticalFacetLayout ? "grid gap-4 md:grid-cols-4" : "block"}>
               {isVerticalFacetLayout ? (
                 <div className="rounded-md border p-3 md:col-span-1">
                   <h4 className="mb-2 text-sm font-medium">Filters</h4>
@@ -518,7 +704,135 @@ export const KlevrList = ({
                 </div>
               ) : null}
 
-              <div className={isVerticalFacetLayout ? "md:col-span-2" : ""}>
+              <div className={isVerticalFacetLayout ? "md:col-span-3" : ""}>
+                {columnFilters.length > 0 ? (
+                  <div className="mb-2 flex flex-wrap items-center gap-2">
+                    {columnFilters.flatMap((filter) => {
+                      const label = columnLabels[filter.id] ?? filter.id;
+                      const columnConfig = columns.find((item) => item.key === filter.id);
+                      const metadata = entity ? columnMetadata[filter.id] : null;
+                      const dataType = columnConfig?.dataType ?? metadata?.dataType ?? "text";
+                      const filterType = getFilterType(dataType);
+
+                      // Date range filter badge
+                      if (filterType === "date-range" && Array.isArray(filter.value)) {
+                        const [fromDate, toDate] = filter.value;
+                        const displayText =
+                          fromDate && toDate
+                            ? `${label}: ${fromDate} to ${toDate}`
+                            : fromDate
+                              ? `${label}: from ${fromDate}`
+                              : toDate
+                                ? `${label}: to ${toDate}`
+                                : null;
+
+                        if (!displayText) {
+                          return [];
+                        }
+
+                        return (
+                          <Badge className="inline-flex items-center gap-1" key={`${filter.id}:date-range`} variant="secondary">
+                            <span>{displayText}</span>
+                            <button
+                              aria-label={`Remove ${label} date filter`}
+                              className="rounded-sm hover:text-foreground"
+                              onClick={() => {
+                                table.getColumn(filter.id)?.setFilterValue(undefined);
+                                table.setPageIndex(0);
+                              }}
+                              type="button"
+                            >
+                              <X className="h-3 w-3" />
+                            </button>
+                          </Badge>
+                        );
+                      }
+
+                      // Numeric range filter badge
+                      if (filterType === "numeric-range" && Array.isArray(filter.value)) {
+                        const [minVal, maxVal] = filter.value;
+                        const displayText =
+                          minVal != null && maxVal != null
+                            ? `${label}: ${minVal}–${maxVal}`
+                            : minVal != null
+                              ? `${label}: ≥${minVal}`
+                              : maxVal != null
+                                ? `${label}: ≤${maxVal}`
+                                : null;
+
+                        if (!displayText) {
+                          return [];
+                        }
+
+                        return (
+                          <Badge className="inline-flex items-center gap-1" key={`${filter.id}:numeric-range`} variant="secondary">
+                            <span>{displayText}</span>
+                            <button
+                              aria-label={`Remove ${label} numeric filter`}
+                              className="rounded-sm hover:text-foreground"
+                              onClick={() => {
+                                table.getColumn(filter.id)?.setFilterValue(undefined);
+                                table.setPageIndex(0);
+                              }}
+                              type="button"
+                            >
+                              <X className="h-3 w-3" />
+                            </button>
+                          </Badge>
+                        );
+                      }
+
+                      // Categorical/text filter badge
+                      if (Array.isArray(filter.value)) {
+                        if (filter.value.length === 0) {
+                          return [];
+                        }
+
+                        return filter.value.map((value) => {
+                          const stringValue = String(value);
+                          return (
+                            <Badge className="inline-flex items-center gap-1" key={`${filter.id}:${stringValue}`} variant="secondary">
+                              <span>{`${label}: ${stringValue}`}</span>
+                              <button
+                                aria-label={`Remove ${label} ${stringValue} filter`}
+                                className="rounded-sm hover:text-foreground"
+                                onClick={() => {
+                                  toggleCategoricalFilter(filter.id, stringValue);
+                                }}
+                                type="button"
+                              >
+                                <X className="h-3 w-3" />
+                              </button>
+                            </Badge>
+                          );
+                        });
+                      }
+
+                      const textValue = String(filter.value ?? "").trim();
+                      if (!textValue) {
+                        return [];
+                      }
+
+                      return (
+                        <Badge className="inline-flex items-center gap-1" key={`${filter.id}:${textValue}`} variant="secondary">
+                          <span>{`${label}: ${textValue}`}</span>
+                          <button
+                            aria-label={`Remove ${label} filter`}
+                            className="rounded-sm hover:text-foreground"
+                            onClick={() => {
+                              table.getColumn(filter.id)?.setFilterValue(undefined);
+                              table.setPageIndex(0);
+                            }}
+                            type="button"
+                          >
+                            <X className="h-3 w-3" />
+                          </button>
+                        </Badge>
+                      );
+                    })}
+                  </div>
+                ) : null}
+
                 <Table>
                   <TableHeader>
                     {table.getHeaderGroups().map((headerGroup) => (
@@ -561,7 +875,7 @@ export const KlevrList = ({
           </>
         ) : null}
 
-        {enablePagination && totalPages > 1 ? (
+        {enablePagination ? (
           <div className="flex items-center justify-end gap-2">
             <Button
               disabled={!table.getCanPreviousPage()}
