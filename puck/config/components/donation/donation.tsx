@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { type ReactNode, useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -80,7 +80,7 @@ export interface DonationProps {
   padding?: CompoundContainerProps["padding"];
   badge?: CompoundBadgeProps;
   heading: string;
-  description?: string;
+  description?: ReactNode;
   backgroundImage?: ImageData;
   backgroundOverlayOpacity?: number;
   stepLabels: DonationStepLabels;
@@ -306,9 +306,9 @@ export const Donation = ({
               {heading}
             </h2>
             {description ? (
-              <p className="max-w-xl text-base leading-relaxed text-background/85 md:text-lg">
+              <div className="max-w-xl text-base leading-relaxed text-background/85 md:text-lg [&_p]:m-0">
                 {description}
-              </p>
+              </div>
             ) : null}
           </div>
 
