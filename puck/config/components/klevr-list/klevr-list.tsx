@@ -55,6 +55,10 @@ export interface KlevrListProps {
   enablePagination?: boolean;
   rowsPerPage?: number;
   enableSorting?: boolean;
+  enableSearch?: boolean;
+  enableColumnChooser?: boolean;
+  enableFacetFilters?: boolean;
+  facetFiltersLayout?: "horizontal" | "vertical";
 }
 
 type KlevrListRow = Record<string, unknown>;
@@ -108,6 +112,10 @@ export const KlevrList = ({
   enablePagination = false,
   rowsPerPage = 10,
   enableSorting = true,
+  enableSearch = true,
+  enableColumnChooser = true,
+  enableFacetFilters = true,
+  facetFiltersLayout = "horizontal",
 }: KlevrListProps) => {
   const resolvedPadding = padding ?? { top: "none", bottom: "none" };
   const [rows, setRows] = useState<KlevrListRow[]>([]);
@@ -175,13 +183,31 @@ export const KlevrList = ({
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
+      if (!enableSearch) {
+        setGlobalSearch("");
+        return;
+      }
+
       setGlobalSearch(globalSearchInput.trim().toLowerCase());
     }, 200);
 
     return () => {
       window.clearTimeout(timer);
     };
-  }, [globalSearchInput]);
+  }, [enableSearch, globalSearchInput]);
+
+  useEffect(() => {
+    if (!enableSearch) {
+      setGlobalSearchInput("");
+      setGlobalSearch("");
+    }
+  }, [enableSearch]);
+
+  useEffect(() => {
+    if (!enableFacetFilters) {
+      setColumnFilters([]);
+    }
+  }, [enableFacetFilters]);
 
   useEffect(() => {
     setPagination((current) => ({
@@ -199,7 +225,7 @@ export const KlevrList = ({
   }, [columns, rows]);
 
   const globallyFilteredRows = useMemo(() => {
-    if (!globalSearch) {
+    if (!enableSearch || !globalSearch) {
       return rows;
     }
 
@@ -212,7 +238,7 @@ export const KlevrList = ({
     return rows.filter((row) =>
       searchKeys.some((key) => normalizeValue(row[key]).includes(globalSearch)),
     );
-  }, [columnVisibility, columns, globalSearch, rows]);
+  }, [columnVisibility, columns, enableSearch, globalSearch, rows]);
 
   const columnDefs = useMemo<ColumnDef<KlevrListRow>[]>(() => {
     return columns.map((column) => ({
@@ -307,6 +333,8 @@ export const KlevrList = ({
 
   const filterableColumns = table.getAllLeafColumns();
 
+  const isVerticalFacetLayout = enableFacetFilters && facetFiltersLayout === "vertical";
+
   const columnLabels = useMemo(() => {
     return columns.reduce<Record<string, string>>((result, column) => {
       result[column.key] = column.label;
@@ -346,6 +374,81 @@ export const KlevrList = ({
     table.setPageIndex(0);
   };
 
+  const renderFacetFilters = (layout: "horizontal" | "vertical") => {
+    return (
+      <div className={layout === "vertical" ? "flex flex-col gap-2" : "flex flex-wrap gap-2"}>
+        {filterableColumns.map((tableColumn) => {
+          const columnConfig = columns.find((item) => item.key === tableColumn.id);
+          if (!columnConfig) {
+            return null;
+          }
+
+          const uniqueValues = uniqueValuesByColumn[columnConfig.key] ?? [];
+          const categorical = isCategoricalColumn(columnConfig, uniqueValues);
+          const filterValue = tableColumn.getFilterValue();
+          const selectedValues = Array.isArray(filterValue) ? filterValue.map(String) : [];
+
+          return (
+            <div
+              className={
+                layout === "vertical"
+                  ? "flex flex-col gap-1"
+                  : "flex min-w-45 flex-1 flex-col gap-1"
+              }
+              key={tableColumn.id}
+            >
+              <span className="text-xs text-muted-foreground">{columnConfig.label}</span>
+              {categorical ? (
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button className="justify-between" size="sm" type="button" variant="outline">
+                      <span className="truncate">
+                        {selectedValues.length > 0
+                          ? `${selectedValues.length} selected`
+                          : `Filter ${columnConfig.label}`}
+                      </span>
+                      <ChevronDown className="h-4 w-4" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="start" className="w-56">
+                    <DropdownMenuLabel>{columnConfig.label}</DropdownMenuLabel>
+                    <DropdownMenuSeparator />
+                    {uniqueValues.length === 0 ? (
+                      <div className="px-2 py-1.5 text-xs text-muted-foreground">No options</div>
+                    ) : (
+                      uniqueValues.map((value) => (
+                        <DropdownMenuCheckboxItem
+                          checked={selectedValues.some(
+                            (item) => normalizeValue(item) === normalizeValue(value),
+                          )}
+                          key={value}
+                          onCheckedChange={() => {
+                            toggleCategoricalFilter(columnConfig.key, value);
+                          }}
+                        >
+                          {value}
+                        </DropdownMenuCheckboxItem>
+                      ))
+                    )}
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              ) : (
+                <Input
+                  className="h-8"
+                  onChange={(event) => {
+                    setTextFilter(columnConfig.key, event.target.value);
+                  }}
+                  placeholder={`Search ${columnConfig.label}`}
+                  value={typeof filterValue === "string" ? filterValue : ""}
+                />
+              )}
+            </div>
+          );
+        })}
+      </div>
+    );
+  };
+
   return (
     <CompoundContainer className={className} padding={resolvedPadding}>
       <div className="space-y-4 w-full">
@@ -357,149 +460,104 @@ export const KlevrList = ({
           <>
             <div className="flex flex-col gap-3 rounded-md border p-3">
               <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-                <Input
-                  className="sm:max-w-xs"
-                  onChange={(event) => {
-                    setGlobalSearchInput(event.target.value);
-                    table.setPageIndex(0);
-                  }}
-                  placeholder="Search visible columns..."
-                  value={globalSearchInput}
-                />
+                {enableSearch ? (
+                  <Input
+                    className="sm:max-w-xs"
+                    onChange={(event) => {
+                      setGlobalSearchInput(event.target.value);
+                      table.setPageIndex(0);
+                    }}
+                    placeholder="Search visible columns..."
+                    value={globalSearchInput}
+                  />
+                ) : (
+                  <div />
+                )}
                 <div className="flex items-center gap-2">
                   <Button onClick={clearAllFilters} size="sm" type="button" variant="ghost">
                     Clear filters
                   </Button>
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                      <Button size="sm" type="button" variant="outline">
-                        Columns
-                        <ChevronDown className="h-4 w-4" />
-                      </Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end" className="w-48">
-                      <DropdownMenuLabel>Toggle columns</DropdownMenuLabel>
-                      <DropdownMenuSeparator />
-                      {table.getAllLeafColumns().map((column) => (
-                        <DropdownMenuCheckboxItem
-                          checked={column.getIsVisible()}
-                          key={column.id}
-                          onCheckedChange={(value) => {
-                            column.toggleVisibility(Boolean(value));
-                          }}
-                        >
-                          {columnLabels[column.id] ?? column.id}
-                        </DropdownMenuCheckboxItem>
-                      ))}
-                    </DropdownMenuContent>
-                  </DropdownMenu>
+                  {enableColumnChooser ? (
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button size="sm" type="button" variant="outline">
+                          Columns
+                          <ChevronDown className="h-4 w-4" />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end" className="w-48">
+                        <DropdownMenuLabel>Toggle columns</DropdownMenuLabel>
+                        <DropdownMenuSeparator />
+                        {table.getAllLeafColumns().map((column) => (
+                          <DropdownMenuCheckboxItem
+                            checked={column.getIsVisible()}
+                            key={column.id}
+                            onCheckedChange={(value) => {
+                              column.toggleVisibility(Boolean(value));
+                            }}
+                          >
+                            {columnLabels[column.id] ?? column.id}
+                          </DropdownMenuCheckboxItem>
+                        ))}
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  ) : null}
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 gap-2 md:grid-cols-2 xl:grid-cols-3">
-                {filterableColumns.map((tableColumn) => {
-                  const columnConfig = columns.find((item) => item.key === tableColumn.id);
-                  if (!columnConfig) {
-                    return null;
-                  }
-
-                  const uniqueValues = uniqueValuesByColumn[columnConfig.key] ?? [];
-                  const categorical = isCategoricalColumn(columnConfig, uniqueValues);
-                  const filterValue = tableColumn.getFilterValue();
-                  const selectedValues = Array.isArray(filterValue) ? filterValue.map(String) : [];
-
-                  return (
-                    <div className="flex flex-col gap-1" key={tableColumn.id}>
-                      <span className="text-xs text-muted-foreground">{columnConfig.label}</span>
-                      {categorical ? (
-                        <DropdownMenu>
-                          <DropdownMenuTrigger asChild>
-                            <Button className="justify-between" size="sm" type="button" variant="outline">
-                              <span className="truncate">
-                                {selectedValues.length > 0
-                                  ? `${selectedValues.length} selected`
-                                  : `Filter ${columnConfig.label}`}
-                              </span>
-                              <ChevronDown className="h-4 w-4" />
-                            </Button>
-                          </DropdownMenuTrigger>
-                          <DropdownMenuContent align="start" className="w-56">
-                            <DropdownMenuLabel>{columnConfig.label}</DropdownMenuLabel>
-                            <DropdownMenuSeparator />
-                            {uniqueValues.length === 0 ? (
-                              <div className="px-2 py-1.5 text-xs text-muted-foreground">
-                                No options
-                              </div>
-                            ) : (
-                              uniqueValues.map((value) => (
-                                <DropdownMenuCheckboxItem
-                                  checked={selectedValues.some(
-                                    (item) => normalizeValue(item) === normalizeValue(value),
-                                  )}
-                                  key={value}
-                                  onCheckedChange={() => {
-                                    toggleCategoricalFilter(columnConfig.key, value);
-                                  }}
-                                >
-                                  {value}
-                                </DropdownMenuCheckboxItem>
-                              ))
-                            )}
-                          </DropdownMenuContent>
-                        </DropdownMenu>
-                      ) : (
-                        <Input
-                          className="h-8"
-                          onChange={(event) => {
-                            setTextFilter(columnConfig.key, event.target.value);
-                          }}
-                          placeholder={`Search ${columnConfig.label}`}
-                          value={typeof filterValue === "string" ? filterValue : ""}
-                        />
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
+              {enableFacetFilters && facetFiltersLayout === "horizontal"
+                ? renderFacetFilters("horizontal")
+                : null}
             </div>
 
-            <Table>
-              <TableHeader>
-                {table.getHeaderGroups().map((headerGroup) => (
-                  <TableRow key={headerGroup.id}>
-                    {headerGroup.headers.map((header) => (
-                      <TableHead key={header.id}>
-                        {header.isPlaceholder
-                          ? null
-                          : flexRender(header.column.columnDef.header, header.getContext())}
-                      </TableHead>
+            <div className={isVerticalFacetLayout ? "grid gap-4 md:grid-cols-3" : "block"}>
+              {isVerticalFacetLayout ? (
+                <div className="rounded-md border p-3 md:col-span-1">
+                  <h4 className="mb-2 text-sm font-medium">Filters</h4>
+                  {renderFacetFilters("vertical")}
+                </div>
+              ) : null}
+
+              <div className={isVerticalFacetLayout ? "md:col-span-2" : ""}>
+                <Table>
+                  <TableHeader>
+                    {table.getHeaderGroups().map((headerGroup) => (
+                      <TableRow key={headerGroup.id}>
+                        {headerGroup.headers.map((header) => (
+                          <TableHead key={header.id}>
+                            {header.isPlaceholder
+                              ? null
+                              : flexRender(header.column.columnDef.header, header.getContext())}
+                          </TableHead>
+                        ))}
+                      </TableRow>
                     ))}
-                  </TableRow>
-                ))}
-              </TableHeader>
-              <TableBody>
-                {displayedRows.length === 0 ? (
-                  <TableRow>
-                    <TableCell
-                      className="text-muted-foreground"
-                      colSpan={Math.max(table.getVisibleLeafColumns().length, 1)}
-                    >
-                      No records found
-                    </TableCell>
-                  </TableRow>
-                ) : (
-                  displayedRows.map((row) => (
-                    <TableRow key={row.id}>
-                      {row.getVisibleCells().map((cell) => (
-                        <TableCell key={cell.id}>
-                          {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                  </TableHeader>
+                  <TableBody>
+                    {displayedRows.length === 0 ? (
+                      <TableRow>
+                        <TableCell
+                          className="text-muted-foreground"
+                          colSpan={Math.max(table.getVisibleLeafColumns().length, 1)}
+                        >
+                          No records found
                         </TableCell>
-                      ))}
-                    </TableRow>
-                  ))
-                )}
-              </TableBody>
-            </Table>
+                      </TableRow>
+                    ) : (
+                      displayedRows.map((row) => (
+                        <TableRow key={row.id}>
+                          {row.getVisibleCells().map((cell) => (
+                            <TableCell key={cell.id}>
+                              {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                            </TableCell>
+                          ))}
+                        </TableRow>
+                      ))
+                    )}
+                  </TableBody>
+                </Table>
+              </div>
+            </div>
           </>
         ) : null}
 

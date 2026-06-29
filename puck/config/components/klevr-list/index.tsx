@@ -49,6 +49,34 @@ const conf: ComponentConfig<KlevrListProps> = {
         { label: "true", value: true },
       ],
     },
+    enableSearch: {
+      type: "radio",
+      options: [
+        { label: "false", value: false },
+        { label: "true", value: true },
+      ],
+    },
+    enableColumnChooser: {
+      type: "radio",
+      options: [
+        { label: "false", value: false },
+        { label: "true", value: true },
+      ],
+    },
+    enableFacetFilters: {
+      type: "radio",
+      options: [
+        { label: "false", value: false },
+        { label: "true", value: true },
+      ],
+    },
+    facetFiltersLayout: {
+      type: "select",
+      options: [
+        { label: "horizontal", value: "horizontal" },
+        { label: "vertical", value: "vertical" },
+      ],
+    },
     padding,
   },
   defaultProps: {
@@ -65,6 +93,10 @@ const conf: ComponentConfig<KlevrListProps> = {
     enablePagination: false,
     rowsPerPage: 10,
     enableSorting: true,
+    enableSearch: true,
+    enableColumnChooser: true,
+    enableFacetFilters: true,
+    facetFiltersLayout: "horizontal",
     padding: {
       ...paddingDefaults,
       top: "none",
