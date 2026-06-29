@@ -41,7 +41,8 @@ export async function fetchFieldMetadata(
   metadataSource: string,
 ): Promise<KlevrFieldMetadata | null> {
   try {
-    const url = new URL(metadataSource);
+    const baseUrl = typeof window !== "undefined" ? window.location.origin : "http://localhost";
+    const url = new URL(metadataSource, baseUrl);
     url.searchParams.set("entity", entity);
     url.searchParams.set("field", fieldKey);
 

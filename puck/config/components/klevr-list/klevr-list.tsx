@@ -115,6 +115,28 @@ function parseRecordIdFromPath(pathname: string): string | undefined {
 
   return decodeURIComponent(parts[parts.length - 1]);
 }
+
+function resolveEntityFromDataSource(dataSource: string): string | undefined {
+  const trimmed = dataSource.trim();
+  if (!trimmed) {
+    return undefined;
+  }
+
+  const baseUrl = typeof window !== "undefined" ? window.location.origin : "http://localhost";
+
+  try {
+    const url = new URL(trimmed, baseUrl);
+    const parts = url.pathname.split("/").filter(Boolean);
+    if (parts.length === 0) {
+      return undefined;
+    }
+
+    return parts[parts.length - 1];
+  } catch {
+    const parts = trimmed.split("/").filter(Boolean);
+    return parts.length > 0 ? parts[parts.length - 1] : undefined;
+  }
+}
 export const KlevrList = ({
   padding,
   className,
@@ -150,6 +172,14 @@ export const KlevrList = ({
   const [globalSearchInput, setGlobalSearchInput] = useState("");
   const [globalSearch, setGlobalSearch] = useState("");
   const [facetOptionSearchByColumn, setFacetOptionSearchByColumn] = useState<Record<string, string>>({});
+
+  const resolvedEntity = useMemo(() => {
+    if (entity?.trim()) {
+      return entity.trim();
+    }
+
+    return resolveEntityFromDataSource(dataSource);
+  }, [dataSource, entity]);
 
   useEffect(() => {
     let cancelled = false;
@@ -203,13 +233,14 @@ export const KlevrList = ({
 
   // Fetch metadata for columns if entity is provided
   useEffect(() => {
-    if (!entity || !enableFacetFilters) {
+    if (!resolvedEntity || !enableFacetFilters) {
+      setColumnMetadata({});
       return;
     }
 
     const loadMetadata = async () => {
       const metadata = await fetchEntityMetadata(
-        entity,
+        resolvedEntity,
         columns.map((col) => col.key),
         metadataSource,
       );
@@ -217,7 +248,7 @@ export const KlevrList = ({
     };
 
     loadMetadata();
-  }, [entity, columns, enableFacetFilters, metadataSource]);
+  }, [resolvedEntity, columns, enableFacetFilters, metadataSource]);
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
@@ -307,8 +338,8 @@ export const KlevrList = ({
     };
 
     return columns.map((column, index) => {
-      const metadata = entity ? columnMetadata[column.key] : null;
-      const dataType = column.dataType ?? metadata?.dataType ?? "text";
+      const metadata = resolvedEntity ? columnMetadata[column.key] : null;
+      const dataType = metadata?.dataType ?? column.dataType ?? "text";
       const filterType = getFilterType(dataType);
 
       let filterFn: FilterFn<KlevrListRow> = includesStringFilter;
@@ -366,7 +397,7 @@ export const KlevrList = ({
         },
       };
     });
-  }, [columns, enableSorting, entity, columnMetadata]);
+  }, [columns, enableSorting, resolvedEntity, columnMetadata]);
 
   const table = useReactTable({
     data: globallyFilteredRows,
@@ -445,8 +476,8 @@ export const KlevrList = ({
             return null;
           }
 
-          const metadata = entity ? columnMetadata[columnConfig.key] : null;
-          const dataType = columnConfig.dataType ?? metadata?.dataType ?? "text";
+          const metadata = resolvedEntity ? columnMetadata[columnConfig.key] : null;
+          const dataType = metadata?.dataType ?? columnConfig.dataType ?? "text";
           const filterType = getFilterType(dataType);
 
           // Categorical filter (choice-single, choice-multi, boolean)
@@ -710,8 +741,8 @@ export const KlevrList = ({
                     {columnFilters.flatMap((filter) => {
                       const label = columnLabels[filter.id] ?? filter.id;
                       const columnConfig = columns.find((item) => item.key === filter.id);
-                      const metadata = entity ? columnMetadata[filter.id] : null;
-                      const dataType = columnConfig?.dataType ?? metadata?.dataType ?? "text";
+                      const metadata = resolvedEntity ? columnMetadata[filter.id] : null;
+                      const dataType = metadata?.dataType ?? columnConfig?.dataType ?? "text";
                       const filterType = getFilterType(dataType);
 
                       // Date range filter badge

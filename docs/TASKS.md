@@ -13,7 +13,7 @@ TODO:
 - [x] klevr-list facets add search/filter to dropdown
 - [ ] klevr-list facets add selected chips
 - [x] klevr-list no pagination controls are visible
-- [-] klevr-list column filter based on datatype (date range, numeric range, categorical)
+- [x] klevr-list column filter based on datatype (date range, numeric range, categorical)
     - shouldn't need datatype in database.json, it should read type from metdata
 
 - [-] donation component:
