@@ -912,6 +912,7 @@ The solution will be considered successful if:
 
 # 19. Open Questions
 
+- What do we call `Puck` in the context of Klevr Portal? e.g. instead of `Puck Editor` do we call it `Klevr Visual Editor` or something else?
 - Where should draft and published Puck JSON be stored?
 - Should preview use mock, preview, or live APIs?
 - How much of the portal shell should be visible during editing?
